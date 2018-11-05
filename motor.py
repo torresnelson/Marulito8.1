@@ -1,9 +1,9 @@
 from pybot.usb4butia import USB4Butia
-from calibracion import leerTatami, sensorGrisDer, sensorGrisIzq, sensorDistDel, sensorDistDer, velMotorIzq, velMotorDer
-import time
+from calibracion import leerTatami, sensorGrisDer, sensorGrisIzq
+from time import sleep
 
 robot = USB4Butia()
-pala = USB4Butia()
+robot.getModulesList()
 sample = 1
 
 prom = []
@@ -13,82 +13,108 @@ for i in range(6):
 	prom.append(int(f.readline()))
 f.close()
 
+GRIS_DERECHA = prom[1];
+GRIS_IZQUIERDA = prom[2];
+
+PUERTO_DIST_CENTRAL = 3
+PUERTO_DIST_LATERAL = 4
+
+distObstaculoCentral = 47000
+distObstaculoLateral = 48000
+offset = 0  
+velMotorSeguidor = 180
+velocidadPala = 700
+
 def router(port):
 	if leerTatami(robot, port,sample) > prom[port]:
 		return 1
 	else: 
 		return 0
 
-def distanciaCentral(port):
-	if robot.getDistance(port) < prom[port]:
+def distanciaCentral():
+	if robot.getDistance(PUERTO_DIST_CENTRAL) < distObstaculoCentral:
 		return 1
 	else:
 		return 0
 
-def distanciaLateral(port):
-	if robot.getDistance(port) < (prom[port]-10000):
+def distanciaLateral():
+	if robot.getDistance(PUERTO_DIST_LATERAL) < distObstaculoLateral:
 		return 1
 	else:
 		return 0
+
+def adelante():
+	robot.set2MotorSpeed(0 , velMotorSeguidor, 0, velMotorSeguidor,1)
+
+def reversa():
+	robot.set2MotorSpeed(1 , velMotorSeguidor, 1, velMotorSeguidor,1)
+
+def giro_izquierda():
+	robot.set2MotorSpeed(1 , velMotorSeguidor, 0, velMotorSeguidor,1)
+
+def giro_derecha():
+	robot.set2MotorSpeed(0 , velMotorSeguidor, 1, velMotorSeguidor,1)
+
+def parar():
+	robot.set2MotorSpeed(0, 0, 0, 0, 1)
+
+def maruli_sleep(time):
+	sleep((180 * time) / velMotorSeguidor)
+
+def seguir_linea():
+	robot.set2MotorSpeed(router(sensorGrisIzq) , velMotorSeguidor, router(sensorGrisDer), velMotorSeguidor)
+
+def bajar_pala():
+	robot.set2MotorSpeed(0,velocidadPala,0,velocidadPala,0)
+	sleep(0.45)
+	robot.set2MotorSpeed(0,0,0,0,0)
+
+def subir_pala():
+	robot.set2MotorSpeed(1,velocidadPala,1,velocidadPala,0)
+	sleep(0.45)
+	robot.set2MotorSpeed(0,0,0,0,0)
 
 raw_input('Coloque el dispositivo en la pista y presione enter para comenzar.')
 
 
 while True:
-	frenteOrto = distanciaCentral(sensorDistDel)
-	frenteDiag = distanciaLateral(sensorDistDel)
-	flancoOrto = distanciaCentral(sensorDistDer)
-	flancoDiag = distanciaLateral(sensorDistDer)
-	frente = (frenteOrto) and (frenteDiag)
-	flanco = (flancoOrto) and (flancoDiag)
-	while not(frente): #frente == 0
-		frenteOrto = distanciaCentral(sensorDistDel)
-		frenteDiag = distanciaLateral(sensorDistDel)
-		flancoOrto = distanciaCentral(sensorDistDer)
-		flancoDiag = distanciaLateral(sensorDistDer)
-		routeIzq = router(sensorGrisIzq)
-		routeDer = router(sensorGrisDer)
-		frente = (frenteOrto) and (frenteDiag)
-		robot.set2MotorSpeed(routeIzq , velMotorIzq, routeDer, velMotorDer)
-		print('fase 1 normal        : '+str(routeIzq)+' Izq   Der '+str(routeDer)+'  sensorDistDel '+str(frente))
-		
-	robot.set2MotorSpeed(1 , velMotorIzq, 1, velMotorDer,'0')
-	time.sleep(0.4)
-	print('fase 1 normal reverse: '+str(routeIzq)+' Izq   Der '+str(routeDer)+'  sensorDistDel '+str(frente))
+	while not(distanciaCentral()) and not(distanciaLateral()):
+		seguir_linea()
 
+	parar()
+	sleep(1)
 
-	robot.set2MotorSpeed(1 , velMotorIzq, 0, velMotorDer,'0')
-	time.sleep(2)
+	if distanciaCentral():
+		reversa()
+		maruli_sleep(0.4)
 
-	robot.set2MotorSpeed(0 , velMotorIzq, 0, velMotorDer,'0')
-	print('HARDCORE')
-	time.sleep(1.5)
+		giro_izquierda()
+		maruli_sleep(2)
 
-		
-	#robot.set2MotorSpeed(routeIzq , 0, routeDer, 0)
-	#raw_input('fase 2 completada,para continuar presione Enter')
+		adelante()
+		print('HARDCORE')
+		maruli_sleep(1.5)
 
-	flancoOrto = distanciaCentral(sensorDistDer)
-	routeIzq = router(sensorGrisIzq)
-	routeDer = router(sensorGrisDer)
-	blanco = (not(router(sensorGrisIzq)) and not(router(sensorGrisIzq)))
-	while (blanco):
-		blanco = (not(router(sensorGrisIzq)) and not(router(sensorGrisIzq)))
-		flancoOrto = distanciaCentral(sensorDistDer)
-		if (flancoOrto):
-			robot.set2MotorSpeed(0, velMotorIzq, 0, velMotorDer,'0')
-			time.sleep(0.1)
-		else:
-			robot.set2MotorSpeed(0, velMotorIzq, 1, velMotorDer,'0')
-			time.sleep(0.3)	
-		print('fase 3: '+str(routeIzq)+' Izq  Der '+str(routeDer)+' sensorDistDer '+str(flanco))
+		while (not(router(sensorGrisIzq)) and not(router(sensorGrisDer))):
+			flanco = distanciaLateral()
+			if (flanco):
+				adelante()
+				maruli_sleep(0.1)
+			else:
+				giro_derecha()
+				maruli_sleep(0.3)	
 
-	routeIzq = router(sensorGrisIzq)
-	routeDer = router(sensorGrisDer)
-	blanco = (not(router(sensorGrisIzq)) and not(router(sensorGrisIzq)))
-	if not(blanco):			
+		adelante()
+		while not(router(sensorGrisIzq)):
+			pass
 
-		robot.set2MotorSpeed(1, velMotorIzq+50, 0, velMotorDer,'0')
-		print('fase 4: de vuelta a la linea')
-		time.sleep(2)	
+	if distanciaLateral():
+		giro_derecha()
+		while not distanciaCentral():
+			pass
 
+		parar()
+		bajar_pala()
+		sleep(1)
+		subir_pala()
+		sleep(120)
